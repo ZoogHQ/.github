@@ -131,16 +131,27 @@ When closing a bug, include before/after screenshots in the PR to demonstrate th
 
 ## Issue Workflow
 
-### Issue Labels
+### Creating Issues
 
-| Label | When to apply |
-|-------|---------------|
-| `ready for qa` | After PR is merged AND deployed to QA environment |
+1. **Add to project**: All new issues go to the **Zoog R&D** project
+2. **Repository**: Infer from context which repo the issue belongs to. If unclear, ask the user
+3. **Default status**: Backlog (unless specified otherwise)
+
+### Project Status Workflow
+
+| Status | When to set |
+|--------|-------------|
+| **Backlog** | Default for new issues |
+| **Ready** | Issue is ready to be picked up |
+| **In Progress** | Agent picks up the task |
+| **In Review** | PR is opened |
+| **In QA** | Deployed to QA environment (automated) |
 
 ### Workflow Steps
 
-1. **Start work** → Rename session to issue name with repo color
-2. **Create PR** → Link to issue with "Closes #XXX"
-3. **PR merged** → Wait for deployment to QA
-4. **Deployed to QA** → Add `ready for qa` label to issue
-5. **QA verified** → Close issue
+1. **Create issue** → Add to Zoog R&D project with Backlog status
+2. **Start work** → Set status to **In Progress**, rename session to issue name
+3. **Create PR** → Set status to **In Review**, link with "Closes #XXX"
+4. **PR merged** → Wait for deployment to QA
+5. **Deployed to QA** → Status automatically set to **In QA**
+6. **QA verified** → Close issue
