@@ -115,3 +115,16 @@ When task completes:
 
 - **ZoogIOS**: Never use worktrees (Xcode compatibility)
 - If at max sessions, inform user and wait
+
+## Testing & Verification
+
+### Before Creating a PR
+
+1. **Deploy locally** and test your changes
+2. **Use browser automation** (Claude in Chrome) to verify the fix works
+3. **Take a screenshot** showing the issue is resolved
+4. **Attach the screenshot** to the PR description
+
+### PR Screenshots
+
+When closing a bug, include before/after screenshots in the PR to demonstrate the fix works. Use the GIF recording feature for interaction bugs.
