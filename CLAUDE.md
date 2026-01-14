@@ -2,8 +2,24 @@
 
 ## Git Workflow
 
-- Always branch from `develop` when starting a new task
-- Always create PRs against the `develop` branch when task completes
+### Environments by Repository
+
+| Repository | Branches | Environments |
+|------------|----------|--------------|
+| ZoogFrontEnd | `develop` → `main` | QA → Production |
+| ZoogCloudFunctions | `develop` → `main` | QA → Production |
+| ZoogIOS | `develop` → `main` | QA → Production |
+| Hailey | `main` only | Production only |
+
+### Branching Rules
+
+**ZoogFrontEnd, ZoogCloudFunctions, ZoogIOS:**
+- Branch from `develop`
+- Create PRs against `develop`
+
+**Hailey:**
+- Branch from `main`
+- Create PRs against `main`
 
 ## GitHub Issue Naming Convention
 
@@ -62,7 +78,12 @@ started: 2026-01-14T10:30:00Z
 ### Creating a Worktree
 
 ```bash
+# For ZoogFrontEnd, ZoogCloudFunctions, ZoogIOS:
 git worktree add ../[repo]-worktree-[branch] -b [branch] develop
+
+# For Hailey:
+git worktree add ../[repo]-worktree-[branch] -b [branch] main
+
 cd ../[repo]-worktree-[branch]
 npm install  # if applicable
 ```
