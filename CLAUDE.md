@@ -23,18 +23,7 @@
 
 ## GitHub Issue Naming Convention
 
-Use the format: `REPO-PREFIX-### description`
-
-Set the GitHub Issue Type (Bug, Feature, Task) instead of using title prefixes.
-
-### Repository Prefixes
-
-| Repository | Prefix |
-|------------|--------|
-| ZoogFrontEnd | ZOOG-FE |
-| ZoogCloudFunctions | ZOOG-CF |
-| ZoogIOS | ZOOG-IOS |
-| Hailey | HAILEY |
+Use a clear, descriptive title for issues. Set the GitHub Issue Type (Bug, Feature, Task) instead of using title prefixes.
 
 ### Issue Types
 
@@ -46,29 +35,39 @@ Set the GitHub Issue Type (Bug, Feature, Task) instead of using title prefixes.
 
 ### Examples
 
-- `ZOOG-FE-42 Share overlay covers multiple items` (type: Bug)
-- `ZOOG-CF-15 Add user analytics endpoint` (type: Feature)
-- `HAILEY-8 Update dependencies` (type: Task)
+- `Share overlay covers multiple items` (type: Bug)
+- `Add user analytics endpoint` (type: Feature)
+- `Update dependencies` (type: Task)
 
 ## Session Naming & Colors
 
-When starting work on an issue, rename your session to match the issue name using `/name`.
+When starting work on an issue, **immediately rename your terminal session** using `/name`.
 
-### Color Scheme by Repository
+### Naming Format
 
-| Repository | Color |
-|------------|-------|
+```
+#<issue_number>: <issue_title>
+```
+
+**Example:** `#2173: Support relative paths for profile pictures`
+
+### Color by Repository
+
+| Repository | Terminal Color |
+|------------|----------------|
 | ZoogIOS | Blue |
 | ZoogCloudFunctions | Red |
 | ZoogFrontEnd | Yellow |
 | Hailey | Purple |
 
-Example: Working on `[BUG] ZOOG-FE-42 Share overlay bug`
-→ Rename session to: `ZOOG-FE-42 Share overlay bug` with yellow color
+### Example
+
+Working on issue #42 "Share overlay covers multiple items" in ZoogFrontEnd:
+→ Run `/name` and set name to `#42: Share overlay covers multiple items` with **yellow** color
 
 ## Worktree Policy (Local CLI Sessions Only)
 
-> **Note:** This policy applies to local CLI sessions only. Web sessions run in isolated cloud containers and manage their own resources independently.
+> **Note:** Worktrees and lock files apply to local CLI sessions only. All other policies (session naming, colors, git workflow, testing, issue workflow) apply to **both local and web sessions**.
 
 ### Session Detection
 
