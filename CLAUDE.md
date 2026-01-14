@@ -23,9 +23,9 @@
 
 ## GitHub Issue Naming Convention
 
-Use the format: `[TYPE] REPO-PREFIX-### description`
+Use the format: `REPO-PREFIX-### description`
 
-Types: `[BUG]`, `[FEATURE]`, `[TASK]`
+Set the GitHub Issue Type (Bug, Feature, Task) instead of using title prefixes.
 
 ### Repository Prefixes
 
@@ -36,11 +36,19 @@ Types: `[BUG]`, `[FEATURE]`, `[TASK]`
 | ZoogIOS | ZOOG-IOS |
 | Hailey | HAILEY |
 
+### Issue Types
+
+| Type | Use for |
+|------|---------|
+| Bug | Defects, issues, broken functionality |
+| Feature | New functionality |
+| Task | Maintenance, refactoring, chores |
+
 ### Examples
 
-- `[BUG] ZOOG-FE-42 Share overlay covers multiple items`
-- `[FEATURE] ZOOG-CF-15 Add user analytics endpoint`
-- `[TASK] HAILEY-8 Update dependencies`
+- `ZOOG-FE-42 Share overlay covers multiple items` (type: Bug)
+- `ZOOG-CF-15 Add user analytics endpoint` (type: Feature)
+- `HAILEY-8 Update dependencies` (type: Task)
 
 ## Session Naming & Colors
 
