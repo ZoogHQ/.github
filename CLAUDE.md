@@ -128,3 +128,19 @@ When task completes:
 ### PR Screenshots
 
 When closing a bug, include before/after screenshots in the PR to demonstrate the fix works. Use the GIF recording feature for interaction bugs.
+
+## Issue Workflow
+
+### Issue Labels
+
+| Label | When to apply |
+|-------|---------------|
+| `ready for qa` | After PR is merged AND deployed to QA environment |
+
+### Workflow Steps
+
+1. **Start work** → Rename session to issue name with repo color
+2. **Create PR** → Link to issue with "Closes #XXX"
+3. **PR merged** → Wait for deployment to QA
+4. **Deployed to QA** → Add `ready for qa` label to issue
+5. **QA verified** → Close issue
