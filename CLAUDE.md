@@ -10,6 +10,7 @@
 | ZoogCloudFunctions | `develop` → `main` | QA → Production |
 | ZoogIOS | `develop` → `main` | QA → Production |
 | Hailey | `main` only | Production only |
+| ZoogDBTools | `main` only | Single environment |
 
 ### Branching Rules
 
@@ -17,7 +18,7 @@
 - Branch from `develop`
 - Create PRs against `develop`
 
-**Hailey:**
+**Hailey, ZoogDBTools:**
 - Branch from `main`
 - Create PRs against `main`
 
@@ -59,6 +60,7 @@ When starting work on an issue, **immediately rename your terminal session** usi
 | ZoogCloudFunctions | Red |
 | ZoogFrontEnd | Yellow |
 | Hailey | Purple |
+| ZoogDBTools | Green |
 
 ### Example
 
@@ -109,6 +111,7 @@ When task completes:
 | ZoogCloudFunctions | 3 | Yes |
 | ZoogIOS | 1 | No (Xcode issues) |
 | Hailey | 2 | Yes |
+| ZoogDBTools | 2 | Yes |
 
 ### Exceptions
 
@@ -127,6 +130,26 @@ When task completes:
 ### PR Screenshots
 
 When closing a bug, include before/after screenshots in the PR to demonstrate the fix works. Use the GIF recording feature for interaction bugs.
+
+## ZoogDBTools Operations
+
+ZoogDBTools is used for company-wide data operations: DB queries, updates, analysis, and one-off tasks.
+
+### Workflow
+
+No strict PR review process required. Operations follow this sequence:
+
+1. **Dry run on QA** — Run operation with no changes (log only)
+2. **Test on QA user** — Execute on a specific test user in QA
+3. **User approval** — Get explicit approval before proceeding to production
+4. **Run on Production** — Execute on production after approval
+
+### Guidelines
+
+- Always start with a dry run
+- Never run directly on production without QA validation
+- Document what the operation does before running
+- Keep operations idempotent when possible
 
 ## Issue Workflow
 
