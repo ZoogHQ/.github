@@ -1,5 +1,36 @@
 # Claude Code Instructions for ZoogHQ
 
+## MANDATORY: Before Starting Any Task
+
+**STOP. Complete these steps FIRST before writing any code:**
+
+### 1. Rename Session
+Run `/name` immediately and set:
+- **Name:** `#<issue_number>: <issue_title>`
+- **Color:** Based on repository (see table below)
+
+| Repository | Color |
+|------------|-------|
+| ZoogIOS | Blue |
+| ZoogCloudFunctions | Red |
+| ZoogFrontEnd | Yellow |
+| Hailey | Purple |
+| ZoogDBTools | Green |
+
+### 2. Create Branch
+```bash
+# ZoogFrontEnd, ZoogCloudFunctions, ZoogIOS:
+git checkout develop && git pull && git checkout -b feature/<issue-number>-<short-description>
+
+# Hailey, ZoogDBTools:
+git checkout main && git pull && git checkout -b feature/<issue-number>-<short-description>
+```
+
+### 3. Update Issue Status
+Move the GitHub issue to **In Progress** in the Zoog R&D project.
+
+---
+
 ## Git Workflow
 
 ### Environments by Repository
