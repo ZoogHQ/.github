@@ -1,7 +1,7 @@
 # Storage Only Plan - Product Spec
 
 **Feature Owner:** Yoav
-**Status:** Draft
+**Status:** In Progress — Backend complete, iOS in progress
 **Target Launch:** 6 weeks
 
 ---
@@ -53,8 +53,8 @@ A low-cost subscription tier ($2.99/month) for users who want to preserve their 
 
 | Attribute | Detail |
 |-----------|--------|
-| Trigger | 30 days after signup (new policy) |
-| Flow | Warning banner + emails before deletion |
+| Trigger | User exceeds 100MB free storage limit |
+| Flow | Warning banner + emails + push + in-app before deletion |
 | Goal | Convert to Storage Plan or Zoog+ |
 
 ---
@@ -111,21 +111,30 @@ If Download: Bulk download flow, then 30-day deletion countdown
 If Cancel: 30-day deletion countdown begins
 ```
 
-### Flow 2: Free-Tier Conversion
+### Flow 2: Free-Tier Storage Limit Exceeded
 
 ```
-Free user reaches Day 30 after signup
+Free user exceeds 100MB storage limit
         ↓
-In-app banner: "Your videos will be deleted in 30 days"
+storageLimitCron marks oldest videos as "scheduledForDeletion"
         ↓
-Email campaign begins (same cadence as churners)
+In-app: Videos show warning badge via getScheduledDeletions API
         ↓
-Options:
-  - Upgrade to Zoog+ (full features)
-  - Subscribe to Storage Plan ($2.99/mo)
+30-day warning sequence begins (email + push + in-app):
+  Day 1:  "You have exceeded your storage limit. X videos scheduled for deletion..."
+  Day 7:  "Your oldest videos are scheduled for removal..."
+  Day 14: "14 days left to save your videos"
+  Day 21: "7 days left!"
+  Day 27: "3 days left — FINAL NOTICE"
+  Day 30: "Your oldest videos have been removed"
+        ↓
+Options at any time:
+  - Upgrade to Zoog+ (full features, unlimited storage)
+  - Subscribe to Storage Plan (100GB, $2.99/mo)
   - Download videos before deletion
+  - Delete videos to go under 100MB limit (auto-reverts scheduled deletions)
         ↓
-If no action by Day 60: Videos deleted
+If no action by Day 30: Videos soft-deleted (hidden from app, files remain on GCS)
 ```
 
 ### Flow 3: In-App Experience (Storage Plan User)
@@ -144,97 +153,135 @@ Upgrade modal: "Unlock Recording with Zoog+"
 
 ---
 
-## Video Deletion Policy
+## Storage Limit Enforcement System (✅ Implemented — PR #363)
 
-Applies to:
-- Zoog+ users who fully cancel (not Storage Plan)
-- Free-tier users who don't convert
+### Per-Plan Storage Limits
 
-### Deletion Timeline
+| Plan | Limit | Config Key |
+|------|-------|------------|
+| Free | 100 MB | `settings/plans.storageLimits.free` |
+| Storage-Only | 100 GB | `settings/plans.storageLimits.storage-only` |
+| Premium (Zoog+) | Unlimited | `settings/plans.storageLimits.premium = -1` |
 
-| Day | Action | Channels |
-|-----|--------|----------|
-| **Day 0** | Subscription ends / Free tier hits 30 days | - |
-| **Day 1** | "Your subscription ended" notification | Email |
-| **Day 7** | "Your memories need a home" | Email + Push |
-| **Day 14** | "14 days left to save your videos" | Email + Push + In-app banner |
-| **Day 21** | "7 days left - download now" | Email + Push + In-app banner |
-| **Day 27** | "3 days left - FINAL WARNING" | Email + Push + In-app full-screen |
-| **Day 30** | Videos marked for deletion | Email confirmation |
-| **Day 37** | **Permanent deletion** | - |
+Limits stored in Firestore `settings/plans` document — can be updated without redeploying.
 
-### Grace Period Features
+### Recording Status Flow
 
-| Day Range | In-App UI |
-|-----------|-----------|
-| Day 1-14 | Yellow banner: "Your videos will be deleted on [DATE]" |
-| Day 15-27 | Red banner with countdown: "X days left" |
-| Day 28-30 | Full-screen warning on app open |
+System-initiated statuses (separate from user-initiated `markedForDeletion` → `deleted`):
+```
+active → scheduledForDeletion → softDeleted
+  ↑            │
+  └── revert ──┘  (user upgrades or deletes enough to be under limit)
+```
 
-### Recovery Window
+| Status | Visibility | Files on GCS | Recoverable |
+|--------|-----------|--------------|-------------|
+| `active` | Visible in app | Yes | N/A |
+| `scheduledForDeletion` | Visible in app with warning | Yes | Yes — automatic |
+| `softDeleted` | Hidden from app | Yes | Yes — automatic on resubscribe |
 
-- **Days 30-37:** Videos soft-deleted (recoverable)
-- If user subscribes during this window: Videos restored automatically
-- **Day 37+:** Permanent deletion, no recovery
+### Enforcement Cron (`storageLimitCron`)
 
-### Bulk Download Feature
+Daily cron (Cloud Scheduler, 3am UTC) that:
+1. Queries users who may be over limit (expired subscribers, storage-only users, users already in grace period)
+2. Calculates **active-only** storage per user (cross-references GCS files with Firestore recording statuses)
+3. Marks oldest recordings as `scheduledForDeletion` until active storage ≤ plan limit
+4. Re-evaluates on every run — if user is now under limit, reverts all scheduled deletions
+5. Transitions `scheduledForDeletion` → `softDeleted` when `scheduledDeletionDate` has passed
 
-| Feature | Description |
-|---------|-------------|
-| Location | Settings > Export Data > Download All Videos |
-| Progress | Show download progress with percentage |
-| Resume | Allow resume if interrupted |
-| Notification | Push notification when complete |
-| Format | Original quality, organized by album |
+### Grace Period Model
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `gracePeriodStartDate` | ISO string | When the 30-day countdown began |
+| `gracePeriodReason` | string | `"subscription_expired"` or `"storage_limit_exceeded"` |
+| `scheduledDeletionDate` | ISO string | On recording docs: `gracePeriodStartDate + 30 days` |
+
+### Client API (`getScheduledDeletions`)
+
+Callable function that returns what the app needs to display deletion warnings:
+```json
+{
+  "hasScheduledDeletions": true,
+  "deletionDate": "2026-03-18T00:00:00Z",
+  "daysLeft": 23,
+  "recordings": [
+    { "id": "rec123", "thumbnailImage": "...", "updateTime": "...", "duration": 42, "scheduledDeletionDate": "..." }
+  ],
+  "totalScheduledCount": 12,
+  "currentActiveUsage": "48.2 MB",
+  "planLimit": "100 MB",
+  "planLimitBytes": 104857600,
+  "overageBytes": 37600000,
+  "tier": "free"
+}
+```
+
+### Storage Usage API (`getStorageUsage`)
+
+Updated to support all tiers with dynamic limits:
+```json
+{
+  "storageUsedBytes": 121634816,
+  "storageUsedGB": 0.11,
+  "storageLimitBytes": 104857600,
+  "storageLimitGB": 0.10,
+  "isOverCap": true,
+  "canUpload": false,
+  "tier": "free"
+}
+```
+
+### Recovery
+
+Automatic recovery when subscription becomes active (via Adapty or Apple webhook):
+1. All `scheduledForDeletion` and `softDeleted` recordings revert to `active`
+2. Grace period fields cleared from user doc
+3. Amplitude "Videos Restored" event fired
+
+Also triggers during cron re-evaluation if user manually deletes enough videos to go under limit.
 
 ---
 
-## Email Templates
+## Notification System (✅ Implemented — PR #363)
 
-### Day 1: Subscription Ended
+### Warning Sequence
 
-**Subject:** Your Zoog subscription has ended
+| Day | Action | Channels |
+|-----|--------|----------|
+| **Day 1** | Videos scheduled, warning begins | Email + Push + In-App |
+| **Day 7** | "Your memories need a home" | Email + Push + In-App |
+| **Day 14** | "14 days left to save your videos" | Email + Push + In-App |
+| **Day 21** | "7 days left" | Email + Push + In-App |
+| **Day 27** | "3 days left — FINAL NOTICE" | Email + Push + In-App |
+| **Day 30** | Videos soft-deleted | Email + Push + In-App |
 
-```
-Hi [Name],
+### Two Template Sets
 
-Your Zoog subscription has ended, but your [X] family videos are still safe with us.
+| Channel | Cancelled Subscribers | Free Users |
+|---------|----------------------|------------|
+| Email | `deletion-warning-day-{N}` | `storage-limit-warning-day-{N}` |
+| Push CTA | Storage-only popup | Upgrade to Zoog+ |
+| In-App CTA | Storage-only popup | Manage subscription |
 
-You have 30 days to decide:
+Selection is automatic based on `gracePeriodReason`:
+- `"subscription_expired"` → subscriber templates
+- `"storage_limit_exceeded"` → free-user templates
 
-KEEP YOUR MEMORIES - $2.99/month
-Your videos stay safe forever. View, download, and share anytime.
-[Keep My Memories]
+### Email Templates (Mandrill)
 
-DOWNLOAD YOUR VIDEOS
-Save them to your device before they're removed.
-[How to Download]
+12 templates total (6 per flow). Each day has a distinct header color that progressively conveys urgency:
 
-After [DATE], your videos will be permanently deleted.
+| Day | Header Color | Subhead Color |
+|-----|-------------|---------------|
+| 1 | `#F1F1F1` (light gray) | `#002349` (dark blue) |
+| 7 | `#002349` (dark blue) | `#FFFFFF` (white) |
+| 14 | `#ff7051` (orange-red) | `#FFFFFF` (white) |
+| 21 | `#ff8500` (orange) | `#FFFFFF` (white) |
+| 27 | `#b71c1c` (dark red) | `#FFFFFF` (white) |
+| 30 | `#424242` (dark gray) | `#FFFFFF` (white) |
 
-The Zoog Team
-```
-
-### Day 27: Final Warning
-
-**Subject:** FINAL NOTICE: Your [X] Zoog videos will be deleted in 3 days
-
-```
-Hi [Name],
-
-This is your final reminder.
-
-In 3 days, on [DATE], your [X] family videos will be permanently deleted.
-
-These memories cannot be recovered.
-
-[Keep Them Safe - $2.99/mo]
-
-Or download them now:
-[Download All Videos]
-
-The Zoog Team
-```
+Merge variables: `*|FNAME|*`, `*|VIDEO_COUNT|*`, `*|STORAGE|*`, `*|DAYS_LEFT|*`, `*|DELETION_DATE|*`
 
 ---
 
@@ -242,30 +289,48 @@ The Zoog Team
 
 ### iOS (ZoogIOS)
 
-| Task | Priority |
-|------|----------|
-| App Store subscription - Add Storage Plan SKU | P0 |
-| Adapty integration - Configure new plan | P0 |
-| Subscription logic - Handle storage-only entitlement | P0 |
-| Lock creation features - Disable record, lens picker | P0 |
-| Upgrade prompts - Modal when tapping locked features | P0 |
-| Cancellation flow UI - Add Storage Plan option | P0 |
-| Grace period banners - Yellow/red warnings | P0 |
-| Bulk download - "Download All" in Settings | P0 |
-| Full-screen warning - Day 28-30 modal | P1 |
+| Task | Priority | Status |
+|------|----------|--------|
+| App Store subscription - Add Storage Plan SKU | P0 | ✅ Done |
+| Adapty integration - Configure new plan | P0 | |
+| Subscription logic - Handle storage-only entitlement | P0 | |
+| Lock creation features - Disable record, lens picker | P0 | |
+| Upgrade prompts - Modal when tapping locked features | P0 | |
+| Cancellation flow UI - Add Storage Plan option | P0 | |
+| Grace period banners - Yellow/red warnings | P0 | |
+| Bulk download - "Download All" in Settings | P0 | |
+| Full-screen warning - Day 28-30 modal | P1 | |
+| Show scheduled deletions UI (via `getScheduledDeletions` API) | P0 | |
 
 ### Backend (ZoogCloudFunctions)
 
-| Task | Priority |
-|------|----------|
-| Subscription validation - Recognize storage-only | P0 |
-| Feature flags endpoint - Correct permissions | P0 |
-| Deletion scheduler - Cron job at Day 30 | P0 |
-| Soft delete logic - Flag videos, retain 7 days | P0 |
-| Hard delete logic - Permanent deletion Day 37 | P0 |
-| Email triggers - Day 1, 7, 14, 21, 27, 30 | P0 |
-| Recovery endpoint - Restore on resubscribe | P1 |
-| Storage calculation - For 100GB cap | P1 |
+| Task | Priority | Status |
+|------|----------|--------|
+| Storage limits per plan (`settings/plans`) | P0 | ✅ PR #363 |
+| Storage limit enforcement cron (`storageLimitCron`) | P0 | ✅ PR #363 |
+| Soft delete logic (`scheduledForDeletion` → `softDeleted`) | P0 | ✅ PR #363 |
+| Client API for scheduled deletions (`getScheduledDeletions`) | P0 | ✅ PR #363 |
+| Email triggers (Day 1, 7, 14, 21, 27, 30) | P0 | ✅ PR #363 |
+| Free-user email templates (6 Mandrill templates) | P0 | ✅ PR #363 |
+| Push + in-app notifications for free users | P0 | ✅ PR #363 |
+| Recovery on resubscribe (webhooks) | P1 | ✅ PR #363 |
+| Active-only storage calculation | P1 | ✅ PR #363 |
+| Dynamic storage limits (`getStorageUsage`) | P1 | ✅ PR #363 |
+| Hard delete logic | P2 | Deferred (#338) |
+
+### Files Modified/Created (PR #363)
+
+| File | Action |
+|------|--------|
+| `functions/controllers/shared.js` | Added `getStorageLimits`, `calculateActiveStorageBytes`, `formatStorageSize`, `revertScheduledDeletions` |
+| `functions/controllers/storageLimitCron.js` | **NEW** — core enforcement cron |
+| `functions/controllers/getScheduledDeletions.js` | **NEW** — client API |
+| `functions/controllers/deletionWarningCron.js` | Refactored to unified grace period model with two milestone sets |
+| `functions/controllers/getStorageUsage.js` | Dynamic limits, active-only calculation |
+| `functions/controllers/getSubscriptionInfo.js` | Recovery logic on resubscribe |
+| `functions/controllers/appleWebHook.js` | Recovery logic on resubscribe |
+| `functions/controllers/testDeletionWarning.js` | Added `reason` param for free-user testing |
+| `functions/index.js` | Registered `storageLimitCron` and `getScheduledDeletions` |
 
 ---
 
@@ -292,7 +357,7 @@ The Zoog Team
 - [ ] Configure Adapty
 - [ ] Implement subscription logic (iOS)
 - [ ] Lock creation features for storage users
-- [ ] Backend: subscription validation + feature flags
+- [x] Backend: subscription validation + feature flags
 
 ### Week 2: Flows & UI
 
@@ -300,13 +365,15 @@ The Zoog Team
 - [ ] Build upgrade prompt modals
 - [ ] Implement grace period banners (yellow/red)
 - [ ] Build bulk download feature
+- [ ] Show scheduled deletions UI (via `getScheduledDeletions` API)
 
-### Week 3: Deletion System
+### Week 3: Deletion System — ✅ Complete
 
-- [ ] Backend: deletion scheduler + soft delete
-- [ ] Backend: hard delete logic
-- [ ] Create email templates
-- [ ] Set up email triggers (Day 1, 7, 14, 21, 27, 30)
+- [x] Backend: storage limit enforcement cron + soft delete
+- [x] Backend: recovery logic in webhooks
+- [x] Create email templates (subscriber + free-user sets)
+- [x] Set up notification triggers (Day 1, 7, 14, 21, 27, 30)
+- [x] Client API for scheduled deletions
 
 ### Week 4: QA & Launch Prep
 
@@ -333,18 +400,20 @@ The Zoog Team
 
 ## Analytics Events
 
-| Event | Trigger |
-|-------|---------|
-| `cancellation_started` | User initiates cancel |
-| `storage_plan_offered` | Modal shown |
-| `storage_plan_selected` | User chooses Storage Plan |
-| `storage_plan_purchased` | Purchase completed |
-| `bulk_download_started` | User starts download |
-| `bulk_download_completed` | Download finished |
-| `deletion_warning_shown` | In-app banner shown |
-| `videos_soft_deleted` | Day 30 deletion |
-| `videos_hard_deleted` | Day 37 permanent deletion |
-| `videos_restored` | Resubscribed during grace period |
+| Event | Trigger | Status |
+|-------|---------|--------|
+| `cancellation_started` | User initiates cancel | |
+| `storage_plan_offered` | Modal shown | |
+| `storage_plan_selected` | User chooses Storage Plan | |
+| `storage_plan_purchased` | Purchase completed | |
+| `bulk_download_started` | User starts download | |
+| `bulk_download_completed` | Download finished | |
+| `deletion_warning_shown` | In-app banner shown | |
+| `Deletion Warning Sent` | Email/push/in-app sent (with `milestone_day`, `grace_period_reason`) | ✅ |
+| `Subscription Event` | Subscription status change | ✅ |
+| `Videos Soft Deleted` | Day 30 soft deletion | ✅ |
+| `Videos Restored` | Resubscribed/went under limit (with `restored_count`, `source`) | ✅ |
+| `videos_hard_deleted` | Permanent deletion | Deferred |
 
 ---
 
@@ -358,6 +427,7 @@ The Zoog Team
 | Notice period for existing churned users? | Recommend 60 days |
 | Family sharing support? | Defer to Phase 2 |
 | Web platform support? | iOS only for MVP |
+| When to implement hard delete? | After soft-delete system is proven stable |
 
 ---
 
@@ -417,7 +487,7 @@ The Zoog Team
 
 ### Projected Cost Structure (1080p videos)
 
-*Video resolution upgrading from 540×960 to 1080×1920 (~4x file size)*
+*Video resolution upgrading from 540x960 to 1080x1920 (~4x file size)*
 
 | Metric | Current (540p) | Projected (1080p) |
 |--------|----------------|-------------------|
@@ -425,18 +495,6 @@ The Zoog Team
 | Median per user | 43 MB | **172 MB** |
 | Avg user GCS cost | $0.0036/mo | **$0.015/mo** |
 | Margin per user | $2.99 | **$2.97** |
-
-### Projected Storage Distribution (1080p)
-
-| Tier | Current | Projected |
-|------|---------|-----------|
-| Under 100 MB | 68.3% | ~25% |
-| 100-500 MB | 23.3% | ~35% |
-| 500 MB - 1 GB | 4.8% | ~20% |
-| 1-10 GB | 3.6% | ~18% |
-| 10-50 GB | 0.0% | ~2% |
-| Over 50 GB | 0.0% | ~0.1% |
-| Over 100 GB | 0.0% | ~0.02% |
 
 ### 100GB Cap Rationale
 
