@@ -241,6 +241,30 @@ Automatic recovery when subscription becomes active (via Adapty or Apple webhook
 
 Also triggers during cron re-evaluation if user manually deletes enough videos to go under limit.
 
+### Subscription Tier Verification (✅ Implemented — PR #369, PR #370)
+
+**Problem:** Adapty webhook events (especially from sandbox) can write stale `accessLevel: "premium"` and `subscriptionActive: true` to Firestore for expired subscriptions. Additionally, Adapty may never send `subscription_expired` webhooks for sandbox auto-renewals — it just stops renewing, so Firestore never learns the sub expired.
+
+**Solution:** Three-layer tier resolution, from most authoritative to fallback:
+
+| Layer | Function | Source | Used By |
+|-------|----------|--------|---------|
+| 1. Adapty API | `getAdaptyVerifiedTier(userId, userData)` | Real-time Adapty API call | `getStorageUsage`, `getScheduledDeletions` |
+| 2. Firestore expiry check | `getValidatedSubscriptionTier(userData)` | Firestore `subscriptionExpiryDate` | `storageLimitCron` (batch, avoids API rate limits) |
+| 3. Access level only | `getSubscriptionTier(accessLevel)` | Firestore `accessLevel` field | Legacy (kept for backward compat) |
+
+**`getAdaptyVerifiedTier`** (PR #370):
+- Calls `GET /api/v1/sdk/profiles/{userId}/` on Adapty API
+- Checks `paid_access_levels.premium.is_active` and `paid_access_levels["storage-only"].is_active`
+- Falls back to `getValidatedSubscriptionTier` if Adapty API is unreachable (5s timeout)
+- Used for user-facing functions where accuracy matters more than latency
+
+**`getValidatedSubscriptionTier`** (PR #369):
+- Checks `subscriptionExpiryDate` — if in the past, returns `"free"`
+- If no expiry date and `subscriptionActive === false`, returns `"free"`
+- Otherwise falls through to `accessLevel` (same as original behavior)
+- Used for batch processing where Adapty API rate limits are a concern
+
 ---
 
 ## Notification System (✅ Implemented — PR #363)
@@ -316,19 +340,23 @@ Merge variables: `*|FNAME|*`, `*|VIDEO_COUNT|*`, `*|STORAGE|*`, `*|DAYS_LEFT|*`,
 | Recovery on resubscribe (webhooks) | P1 | ✅ PR #363 |
 | Active-only storage calculation | P1 | ✅ PR #363 |
 | Dynamic storage limits (`getStorageUsage`) | P1 | ✅ PR #363 |
+| Subscription tier verification — Firestore expiry check | P0 | ✅ PR #369 |
+| Subscription tier verification — Adapty API real-time check | P0 | ✅ PR #370 |
+| Validation script (`validate-subscription-tiers.js`) | P2 | ✅ PR #369 |
 | Hard delete logic | P2 | Deferred (#338) |
 
-### Files Modified/Created (PR #363)
+### Files Modified/Created (PR #363, #369, #370)
 
 | File | Action |
 |------|--------|
-| `functions/controllers/shared.js` | Added `getStorageLimits`, `calculateActiveStorageBytes`, `formatStorageSize`, `revertScheduledDeletions` |
+| `functions/controllers/shared.js` | Added `getStorageLimits`, `calculateActiveStorageBytes`, `formatStorageSize`, `revertScheduledDeletions` (PR #363); Added `getValidatedSubscriptionTier` (PR #369); Added `getAdaptyVerifiedTier` (PR #370) |
 | `functions/controllers/storageLimitCron.js` | **NEW** — core enforcement cron |
 | `functions/controllers/getScheduledDeletions.js` | **NEW** — client API |
 | `functions/controllers/deletionWarningCron.js` | Refactored to unified grace period model with two milestone sets |
 | `functions/controllers/getStorageUsage.js` | Dynamic limits, active-only calculation |
 | `functions/controllers/getSubscriptionInfo.js` | Recovery logic on resubscribe |
 | `functions/controllers/appleWebHook.js` | Recovery logic on resubscribe |
+| `scripts/validate-subscription-tiers.js` | **NEW** — read-only tier validation script (PR #369) |
 | `functions/controllers/testDeletionWarning.js` | Added `reason` param for free-user testing |
 | `functions/index.js` | Registered `storageLimitCron` and `getScheduledDeletions` |
 
@@ -358,6 +386,7 @@ Merge variables: `*|FNAME|*`, `*|VIDEO_COUNT|*`, `*|STORAGE|*`, `*|DAYS_LEFT|*`,
 - [ ] Implement subscription logic (iOS)
 - [ ] Lock creation features for storage users
 - [x] Backend: subscription validation + feature flags
+- [x] Backend: subscription tier verification — Adapty API + Firestore expiry checks (PR #369, #370)
 
 ### Week 2: Flows & UI
 
