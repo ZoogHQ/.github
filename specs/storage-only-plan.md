@@ -267,7 +267,9 @@ Also triggers during cron re-evaluation if user manually deletes enough videos t
 
 ---
 
-## Notification System (✅ Implemented — PR #363)
+## Notification System (✅ Implemented — PR #363, unified in PR #374)
+
+All warning notifications are now handled by `storageLimitCron` (the separate `deletionWarningCron` was removed). This ensures milestone warnings run in the same pass as storage enforcement, reducing redundant Firestore queries.
 
 ### Warning Sequence
 
@@ -307,6 +309,24 @@ Selection is automatic based on `gracePeriodReason`:
 
 Merge variables: `*|FNAME|*`, `*|VIDEO_COUNT|*`, `*|STORAGE|*`, `*|DAYS_LEFT|*`, `*|DELETION_DATE|*`
 
+### Relaxing Notifications (✅ Implemented — PR #374)
+
+When a user exits grace period (by upgrading or deleting enough videos), a "relaxing" notification reassures them:
+
+| Reason | Title | Subtitle | Thumbnail | Tap Action |
+|--------|-------|----------|-----------|------------|
+| `upgrade` | "Your Zoogs are now safe" | "You now have {tierLabel} storage — your videos are no longer scheduled for deletion." | `Hearts_popup2_sw1ue9.png` | None |
+| `deleted_videos` | "Your Zoogs are no longer scheduled for deletion" | "You're back within your storage limit. Consider upgrading to Zoog+ for more space." | `Potion.png` | Manage Subscription |
+
+**Trigger points:**
+- `storageLimitCron` — when cron detects user is now under limit or on unlimited tier
+- Adapty webhook (`getSubscriptionInfo`) — on `subscription_updated` and `access_level_updated` when user was in grace period
+- Apple webhook (`appleWebHook`) — when user resubscribes via App Store
+
+**Helper functions (in `shared.js`):**
+- `sendPushAndInApp(userId, { title, subtitle, thumbnailImage, tapAction, info })` — generic FCM + in-app notification helper
+- `sendRelaxingNotification(userId, reason, tierLabel)` — sends the relaxing push/in-app and fires "Relaxing Notification Sent" Amplitude event
+
 ---
 
 ## Technical Requirements
@@ -344,21 +364,23 @@ Merge variables: `*|FNAME|*`, `*|VIDEO_COUNT|*`, `*|STORAGE|*`, `*|DAYS_LEFT|*`,
 | Subscription tier verification — Adapty API real-time check | P0 | ✅ PR #370 |
 | Validation script (`validate-subscription-tiers.js`) | P2 | ✅ PR #369 |
 | Hard delete logic | P2 | Deferred (#338) |
+| Merge deletionWarningCron into storageLimitCron | P1 | ✅ PR #374 |
+| Relaxing notifications (cron + webhooks) | P1 | ✅ PR #374 |
 
 ### Files Modified/Created (PR #363, #369, #370)
 
 | File | Action |
 |------|--------|
-| `functions/controllers/shared.js` | Added `getStorageLimits`, `calculateActiveStorageBytes`, `formatStorageSize`, `revertScheduledDeletions` (PR #363); Added `getValidatedSubscriptionTier` (PR #369); Added `getAdaptyVerifiedTier` (PR #370) |
-| `functions/controllers/storageLimitCron.js` | **NEW** — core enforcement cron |
+| `functions/controllers/shared.js` | Added `getStorageLimits`, `calculateActiveStorageBytes`, `formatStorageSize`, `revertScheduledDeletions` (PR #363); Added `getValidatedSubscriptionTier` (PR #369); Added `getAdaptyVerifiedTier` (PR #370); Added `sendPushAndInApp`, `sendRelaxingNotification` (PR #374) |
+| `functions/controllers/storageLimitCron.js` | **NEW** — core enforcement cron; now also handles milestone warnings and relaxing notifications (PR #374) |
 | `functions/controllers/getScheduledDeletions.js` | **NEW** — client API |
-| `functions/controllers/deletionWarningCron.js` | Refactored to unified grace period model with two milestone sets |
+| `functions/controllers/deletionWarningCron.js` | **DELETED** — all logic merged into `storageLimitCron.js` (PR #374) |
 | `functions/controllers/getStorageUsage.js` | Dynamic limits, active-only calculation |
-| `functions/controllers/getSubscriptionInfo.js` | Recovery logic on resubscribe |
-| `functions/controllers/appleWebHook.js` | Recovery logic on resubscribe |
+| `functions/controllers/getSubscriptionInfo.js` | Recovery logic on resubscribe; relaxing notifications on subscription_updated and access_level_updated (PR #374) |
+| `functions/controllers/appleWebHook.js` | Recovery logic on resubscribe; relaxing notification on resubscribe (PR #374) |
 | `scripts/validate-subscription-tiers.js` | **NEW** — read-only tier validation script (PR #369) |
 | `functions/controllers/testDeletionWarning.js` | Added `reason` param for free-user testing |
-| `functions/index.js` | Registered `storageLimitCron` and `getScheduledDeletions` |
+| `functions/index.js` | Registered `storageLimitCron` and `getScheduledDeletions`; removed `deletionWarningCron` export (PR #374) |
 
 ---
 
@@ -442,6 +464,7 @@ Merge variables: `*|FNAME|*`, `*|VIDEO_COUNT|*`, `*|STORAGE|*`, `*|DAYS_LEFT|*`,
 | `Subscription Event` | Subscription status change | ✅ |
 | `Videos Soft Deleted` | Day 30 soft deletion | ✅ |
 | `Videos Restored` | Resubscribed/went under limit (with `restored_count`, `source`) | ✅ |
+| `Relaxing Notification Sent` | User exits grace period (with `reason`, `tier_label`) | ✅ |
 | `videos_hard_deleted` | Permanent deletion | Deferred |
 
 ---
