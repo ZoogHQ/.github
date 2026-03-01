@@ -116,7 +116,8 @@ If Cancel: 30-day deletion countdown begins
 ```
 Free user exceeds 100MB storage limit
         ↓
-storageLimitCron marks oldest videos as "scheduledForDeletion"
+evaluateUserStorageLimit marks oldest videos as "scheduledForDeletion"
+(triggered by recording changes, webhook events, or cron safety net)
         ↓
 In-app: Videos show warning badge via getScheduledDeletions API
         ↓
@@ -180,14 +181,39 @@ active → scheduledForDeletion → softDeleted
 | `scheduledForDeletion` | Visible in app with warning | Yes | Yes — automatic |
 | `softDeleted` | Hidden from app | Yes | Yes — automatic on resubscribe |
 
-### Enforcement Cron (`storageLimitCron`)
+### Enforcement Model (Event-Driven + Cron Safety Net — PR #385)
 
-Daily cron (Cloud Scheduler, 3am UTC) that:
-1. Queries users who may be over limit (expired subscribers, storage-only users, users already in grace period)
-2. Calculates **active-only** storage per user (cross-references GCS files with Firestore recording statuses)
-3. Marks oldest recordings as `scheduledForDeletion` until active storage ≤ plan limit
-4. Re-evaluates on every run — if user is now under limit, reverts all scheduled deletions
-5. Transitions `scheduledForDeletion` → `softDeleted` when `scheduledDeletionDate` has passed
+Storage limit enforcement is **event-driven**: evaluation happens at the moment of change rather than via brute-force cron sweeps. The cron is retained only for time-based operations and as a safety net.
+
+#### `evaluateUserStorageLimit` HTTP Endpoint
+
+Standalone per-user evaluation endpoint (`POST /evaluateUserStorageLimit`) that:
+1. Accepts `{ userId, source, skipAdaptyVerification }` — source for logging, skip flag controls tier resolution method
+2. **30-second debounce** via `storageCalculatedAt` timestamp — prevents redundant evaluations on rapid events
+3. Calculates **active-only** storage per user (cross-references GCS files with Firestore recording statuses)
+4. If over limit: sets grace period, marks oldest recordings as `scheduledForDeletion` until active storage ≤ plan limit
+5. If under limit and in grace period: reverts all scheduled deletions, sends relaxing notification
+6. Runtime: `timeoutSeconds: 120`, `memory: "512MB"`
+
+#### Event Triggers
+
+| Trigger | Mechanism | skipAdaptyVerification |
+|---|---|---|
+| Subscription expired/downgraded | Adapty webhook → `evaluateUserStorageLimit` | `false` (calls Adapty API) |
+| Subscription access level changed | Adapty webhook (access_level_updated) → `evaluateUserStorageLimit` | `false` |
+| Apple subscription expired | Apple webhook → `evaluateUserStorageLimit` | `false` |
+| Recording created/status changed | Recordings trigger → `evaluateUserStorageLimit` (fire-and-forget) | `true` (Firestore-only) |
+
+On HTTP call failure, the recordings trigger falls back to setting `storageNeedsRecalc = true` so the cron catches it.
+
+#### Cron (`storageLimitCron`) — Slimmed to Safety Net
+
+Daily cron (Cloud Scheduler, 3am UTC), reduced from scanning all inactive users to only:
+1. **Storage-only + premium safety net** — re-verifies tier via Adapty API for subscribed users (catches stale Firestore data)
+2. **`storageNeedsRecalc` fallback** — picks up users whose event-driven evaluation failed
+3. **Grace period processing** — milestone notifications (days 1, 7, 14, 21, 27, 30) and soft-delete transitions (`scheduledForDeletion` → `softDeleted`)
+
+Runtime reduced from `540s/1GB` to `300s/512MB`.
 
 ### Grace Period Model
 
@@ -196,6 +222,8 @@ Daily cron (Cloud Scheduler, 3am UTC) that:
 | `gracePeriodStartDate` | ISO string | When the 30-day countdown began |
 | `gracePeriodReason` | string | `"subscription_expired"` or `"storage_limit_exceeded"` |
 | `scheduledDeletionDate` | ISO string | On recording docs: `gracePeriodStartDate + 30 days` |
+| `storageCalculatedAt` | ISO string | Last evaluation timestamp (30s debounce for event-driven) |
+| `storageNeedsRecalc` | boolean | Fallback flag — set when event-driven HTTP call fails, cleared by cron |
 
 ### Client API (`getScheduledDeletions`)
 
@@ -249,8 +277,8 @@ Also triggers during cron re-evaluation if user manually deletes enough videos t
 
 | Layer | Function | Source | Used By |
 |-------|----------|--------|---------|
-| 1. Adapty API | `getAdaptyVerifiedTier(userId, userData)` | Real-time Adapty API call | `getStorageUsage`, `getScheduledDeletions` |
-| 2. Firestore expiry check | `getValidatedSubscriptionTier(userData)` | Firestore `subscriptionExpiryDate` | `storageLimitCron` (batch, avoids API rate limits) |
+| 1. Adapty API | `getAdaptyVerifiedTier(userId, userData)` | Real-time Adapty API call | `getStorageUsage`, `getScheduledDeletions`, `evaluateUserStorageLimit` (when `skipAdaptyVerification: false`) |
+| 2. Firestore expiry check | `getValidatedSubscriptionTier(userData)` | Firestore `subscriptionExpiryDate` | `storageLimitCron` (batch), `evaluateUserStorageLimit` (when `skipAdaptyVerification: true`) |
 | 3. Access level only | `getSubscriptionTier(accessLevel)` | Firestore `accessLevel` field | Legacy (kept for backward compat) |
 
 **`getAdaptyVerifiedTier`** (PR #370):
@@ -366,21 +394,26 @@ When a user exits grace period (by upgrading or deleting enough videos), a "rela
 | Hard delete logic | P2 | Deferred (#338) |
 | Merge deletionWarningCron into storageLimitCron | P1 | ✅ PR #374 |
 | Relaxing notifications (cron + webhooks) | P1 | ✅ PR #374 |
+| Event-driven enforcement (`evaluateUserStorageLimit` endpoint + webhook/trigger wiring) | P0 | ✅ PR #385 |
+| One-time backfill endpoint (`storageLimitBackfill`) | P2 | ✅ PR #385 (temporary — remove after use) |
 
-### Files Modified/Created (PR #363, #369, #370)
+### Files Modified/Created (PR #363, #369, #370, #374, #385)
 
 | File | Action |
 |------|--------|
-| `functions/controllers/shared.js` | Added `getStorageLimits`, `calculateActiveStorageBytes`, `formatStorageSize`, `revertScheduledDeletions` (PR #363); Added `getValidatedSubscriptionTier` (PR #369); Added `getAdaptyVerifiedTier` (PR #370); Added `sendPushAndInApp`, `sendRelaxingNotification` (PR #374) |
-| `functions/controllers/storageLimitCron.js` | **NEW** — core enforcement cron; now also handles milestone warnings and relaxing notifications (PR #374) |
+| `functions/controllers/shared.js` | Added `getStorageLimits`, `calculateActiveStorageBytes`, `formatStorageSize`, `revertScheduledDeletions` (PR #363); Added `getValidatedSubscriptionTier` (PR #369); Added `getAdaptyVerifiedTier` (PR #370); Added `sendPushAndInApp`, `sendRelaxingNotification` (PR #374); Extracted `scheduleExcessRecordings`, `processSoftDeletes` as shared exports (PR #385) |
+| `functions/controllers/evaluateUserStorageLimit.js` | **NEW** — per-user event-driven storage evaluation endpoint with 30s debounce (PR #385) |
+| `functions/controllers/storageLimitBackfill.js` | **NEW** — temporary paginated backfill for existing users (PR #385, remove after use) |
+| `functions/controllers/storageLimitCron.js` | **NEW** — core enforcement cron; now also handles milestone warnings and relaxing notifications (PR #374); Slimmed to safety net — removed inactive-user sweep, reduced runtime (PR #385) |
 | `functions/controllers/getScheduledDeletions.js` | **NEW** — client API |
 | `functions/controllers/deletionWarningCron.js` | **DELETED** — all logic merged into `storageLimitCron.js` (PR #374) |
 | `functions/controllers/getStorageUsage.js` | Dynamic limits, active-only calculation |
-| `functions/controllers/getSubscriptionInfo.js` | Recovery logic on resubscribe; relaxing notifications on subscription_updated and access_level_updated (PR #374) |
-| `functions/controllers/appleWebHook.js` | Recovery logic on resubscribe; relaxing notification on resubscribe (PR #374) |
+| `functions/controllers/recordingsCollectionTrigger.js` | Fire-and-forget call to `evaluateUserStorageLimit` on recording changes, with `storageNeedsRecalc` fallback (PR #385) |
+| `functions/controllers/getSubscriptionInfo.js` | Recovery logic on resubscribe; relaxing notifications on subscription_updated and access_level_updated (PR #374); Calls `evaluateUserStorageLimit` on expiry/refund and access_level_updated (PR #385) |
+| `functions/controllers/appleWebHook.js` | Recovery logic on resubscribe; relaxing notification on resubscribe (PR #374); Calls `evaluateUserStorageLimit` when subscription inactive (PR #385) |
 | `scripts/validate-subscription-tiers.js` | **NEW** — read-only tier validation script (PR #369) |
 | `functions/controllers/testDeletionWarning.js` | Added `reason` param for free-user testing |
-| `functions/index.js` | Registered `storageLimitCron` and `getScheduledDeletions`; removed `deletionWarningCron` export (PR #374) |
+| `functions/index.js` | Registered `storageLimitCron` and `getScheduledDeletions`; removed `deletionWarningCron` export (PR #374); Registered `evaluateUserStorageLimit` and `storageLimitBackfill` (PR #385) |
 
 ---
 
