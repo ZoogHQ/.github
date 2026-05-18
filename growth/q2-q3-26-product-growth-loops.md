@@ -26,8 +26,8 @@ On Nov 6, 2025 (ZoogFrontEnd commit `b6c3195` "incentive sharing task"), the web
 
 **Supporting charts:**
 - [Web Reaction Rate — total (Click Play → any reaction)](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/fkgvu72t)
-- [Web Likes rate (Click Play → User clicks the heart)](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/l1d33b8q) — control: barely moved
-- [Web Requests rate (Click Play → User Requested Content)](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/ljfebiws) — the 35% drop
+- [Web Likes rate (Click Play → User clicks the heart)](https://app.amplitude.com/analytics/zoog/chart/kj0tz5d2?sharingId=zg2jh9-A) — control: barely moved
+- [Web Requests rate (Click Play → User Requested Content)](https://app.amplitude.com/analytics/zoog/chart/04nsaypt?sharingId=59DZWtQ4) — the 35% drop
 - [Mobile Requests by persona (Reactions View → User Requested Content)](https://app.amplitude.com/analytics/zoog/chart/zn63vkhp/edit/zpaa1k0a) — control: stable across personas, rules out content quality
 
 ### Area 2 — New user web view → share collapse (Aug 25 / Dec 25 / Feb 26)
@@ -43,14 +43,53 @@ Three separate inflection points in the new-user web `Recording Page → User se
 A separate bug in `AppDelegate+AppsFlyer.swift` (commit `15f7f203d`). The deferred deep-link handler has an inverted condition that suppresses the `Opened using deep link {type: "view", isDeferred: true}` event for most cold installs — and as a side effect, fails to route the user to the recording they were trying to view. Capture rate currently ~65/month vs an estimated 200–400 expected.
 
 **Supporting charts:**
-- [Share-loop conversion split by isDeferred (Nov 25 – today)](https://app.amplitude.com/analytics/zoog/chart/fxcpr11c/edit/aasxxnm3) — isDeferred=true cohort converts much worse and on smaller base than isDeferred=false
-- [Total Download clicks vs first-time deep-link opens (the ratio flip)](https://app.amplitude.com/analytics/zoog/chart/new/igaas1vt) — pre-Sep 2025: 1st-time opens > download clicks; post-Sep: the ratio flips
-- [Opened using deep link by `type` over time](https://app.amplitude.com/analytics/zoog/chart/new/hhf2jvne) — Jul 2025 view→recId rename (measurement artifact, distinct from this bug)
+- [Share-loop conversion split by isDeferred (Nov 25 – today)](https://app.amplitude.com/analytics/zoog/chart/yw858t7o?sharingId=O5suxM0j) — isDeferred=true cohort converts much worse and on smaller base than isDeferred=false
+- [Total Download clicks vs first-time deep-link opens (the ratio flip)](https://app.amplitude.com/analytics/zoog/chart/4amqn4gt?sharingId=mxpVte8F) — pre-Sep 2025: 1st-time opens > download clicks; post-Sep: the ratio flips
+- [Opened using deep link by `type` over time](https://app.amplitude.com/analytics/zoog/chart/sz173rgr?sharingId=KsO0_yd_) — Jul 2025 view→recId rename (measurement artifact, distinct from this bug)
 - [isDeferred=true monthly uniques (Sep '25 onward)](https://app.amplitude.com/analytics/zoog/chart/new/4o8szj36) — ~65/month in Apr 2026; the floor the fix should lift
 
 ### Plus: cross-device identity gap (structural)
 
 There's no web → iOS device_id handoff in the OneLink URL. Every web visitor and every post-install user lives under separate `amplitude_id` entries with no merge logic outside of post-install email-match sign-in. Cohort analysis across surfaces is materially distorted; the loop's true install contribution is not measurable without a fix.
+
+---
+
+## Canonical share-loop funnels (new users firing `Opened using deep link` with `type IN view, recId`)
+
+Four saved funnels measure share-loop health, each filtered to Amplitude's "New Users" segment so the cohort is share-loop-attributable.
+
+### Open From Deep Link [New User] → View
+
+The "did the recipient actually engage with what was sent" rate.
+
+- **12-month aggregate: 11.5%** of new users firing Opened using deep link go on to Watch Recording View (same-day, 1-day conversion window)
+- Chart: [Open From Deep Link [New User] > View](https://app.amplitude.com/analytics/zoog/chart/gx6j5gy7?linkingDashboardId=227vmg5l&sharingId=meht_Lbc)
+
+### Open From Deep Link [New User] → React
+
+The "did the recipient react (like / laugh / wow / hug) to what they watched" rate. This is one of the two engagement signals that captures the Nov 2025 incentive-modal damage.
+
+- **12-month aggregate: 0.92%** of new deep-link users go on to fire User reacted to video. Note: this is a 3-step funnel (Deep link → Watch → React), so the low rate reflects compounding stepwise loss.
+- Chart: [Open From Deep Link [New User] > React](https://app.amplitude.com/analytics/zoog/chart/m3zdpxlx?sharingId=lGqMd4--)
+
+### Open From Deep Link [New User] → Request Content
+
+The "did the recipient ask for another Zoog" rate — leading indicator of healthy loop engagement. The Nov 2025 regression hits hardest here.
+
+- **12-month aggregate: 0.17%** end-to-end (Deep link → Watch → Request)
+- Chart: [Open From Deep Link [New User] > Request Content](https://app.amplitude.com/analytics/zoog/chart/rt4w937f?sharingId=unWLNeJT)
+
+### Open From Deep Link [New User] → Share
+
+The "did the recipient become a re-sharer themselves" rate — the loop's regenerative output.
+
+- **12-month aggregate: 4.49%** of new deep-link openers go on to User selected share option
+- Split by `isDeferred` shows: cold-install (isDeferred=true) cohort converts much worse (5–28%) than warm-on-first-session (25–41%) — both decline through the year
+- Charts:
+  - [Open From Deep Link [New User] > Share](https://app.amplitude.com/analytics/zoog/chart/fxcpr11c)
+  - [Same funnel split by isDeferred](https://app.amplitude.com/analytics/zoog/chart/yw858t7o?sharingId=O5suxM0j)
+
+> **Suggested dashboard:** group all four into a `Share Loop · Deep Link (New User) Funnels` dashboard alongside the existing `Growth Loops` dashboard ([227vmg5l](https://app.amplitude.com/analytics/zoog/dashboard/227vmg5l)) for ongoing monitoring.
 
 ---
 
@@ -252,21 +291,27 @@ Five tracks. A is the urgent rollback. B is the iOS code fix. C–E are follow-o
 
 ### Canonical Amplitude charts referenced in this plan
 
+**Canonical share-loop funnels (new users, Deep link → X):**
+- [Open From Deep Link [New User] > View](https://app.amplitude.com/analytics/zoog/chart/gx6j5gy7?linkingDashboardId=227vmg5l&sharingId=meht_Lbc)
+- [Open From Deep Link [New User] > React](https://app.amplitude.com/analytics/zoog/chart/m3zdpxlx?sharingId=lGqMd4--)
+- [Open From Deep Link [New User] > Request Content](https://app.amplitude.com/analytics/zoog/chart/rt4w937f?sharingId=unWLNeJT)
+- [Open From Deep Link [New User] > Share](https://app.amplitude.com/analytics/zoog/chart/fxcpr11c)
+- [Share funnel split by isDeferred](https://app.amplitude.com/analytics/zoog/chart/yw858t7o?sharingId=O5suxM0j)
+
 **Area 1 — Web request-rate (Nov 2025 regression):**
 - [Web Reaction Rate — total](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/fkgvu72t)
-- [Web Likes rate](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/l1d33b8q)
-- [Web Requests rate](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/ljfebiws)
+- [Web Likes rate](https://app.amplitude.com/analytics/zoog/chart/kj0tz5d2?sharingId=zg2jh9-A)
+- [Web Requests rate](https://app.amplitude.com/analytics/zoog/chart/04nsaypt?sharingId=59DZWtQ4)
 - [Mobile Requests by persona (control)](https://app.amplitude.com/analytics/zoog/chart/zn63vkhp/edit/zpaa1k0a)
 
 **iOS deferred-deep-link bug evidence:**
-- [Share-loop conversion split by isDeferred](https://app.amplitude.com/analytics/zoog/chart/fxcpr11c/edit/aasxxnm3)
-- [Download clicks vs first-time deep-link opens (ratio flip)](https://app.amplitude.com/analytics/zoog/chart/new/igaas1vt)
-- [Opened using deep link by type over time (Jul rename)](https://app.amplitude.com/analytics/zoog/chart/new/hhf2jvne)
+- [Download clicks vs first-time deep-link opens (ratio flip)](https://app.amplitude.com/analytics/zoog/chart/4amqn4gt?sharingId=mxpVte8F)
+- [Opened using deep link by type over time (Jul rename)](https://app.amplitude.com/analytics/zoog/chart/sz173rgr?sharingId=KsO0_yd_)
 - [isDeferred=true monthly uniques](https://app.amplitude.com/analytics/zoog/chart/new/4o8szj36)
 
 **Volume baselines (loop input + funnel steps):**
-- [Recording Page (mobile-web, new) — monthly](https://app.amplitude.com/analytics/zoog/chart/new/phetw7a3)
-- [User clicks download Zoog — monthly](https://app.amplitude.com/analytics/zoog/chart/new/6ataybd7)
+- [Recording Page (mobile-web, new) — monthly](https://app.amplitude.com/analytics/zoog/chart/l1v9atm6?sharingId=dJKRrnVs)
+- [User clicks download Zoog — monthly](https://app.amplitude.com/analytics/zoog/chart/ilaem2z1?sharingId=RJSCuSlK)
 - [Opened using deep link (view+recId, new users) — monthly](https://app.amplitude.com/analytics/zoog/chart/new/p78j1w9d)
 - [Click Start Recording (new users) — monthly](https://app.amplitude.com/analytics/zoog/chart/new/kcywt6aq)
 - [User selected share option — monthly active sharers](https://app.amplitude.com/analytics/zoog/chart/new/5fw26l7d)
