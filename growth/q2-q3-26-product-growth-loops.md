@@ -24,6 +24,12 @@ On Nov 6, 2025 (ZoogFrontEnd commit `b6c3195` "incentive sharing task"), the web
 - Mobile request rate (Reactions View → User Requested Content): stable or improving across personas — confirms it's not content quality
 - Downstream effect: new-user Watch → Click Start Recording funnel fell **50% (May '25) → 31% (Mar '26)** — same timing, same shape
 
+**Supporting charts:**
+- [Web Reaction Rate — total (Click Play → any reaction)](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/fkgvu72t)
+- [Web Likes rate (Click Play → User clicks the heart)](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/l1d33b8q) — control: barely moved
+- [Web Requests rate (Click Play → User Requested Content)](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/ljfebiws) — the 35% drop
+- [Mobile Requests by persona (Reactions View → User Requested Content)](https://app.amplitude.com/analytics/zoog/chart/zn63vkhp/edit/zpaa1k0a) — control: stable across personas, rules out content quality
+
 ### Area 2 — New user web view → share collapse (Aug 25 / Dec 25 / Feb 26)
 
 Three separate inflection points in the new-user web `Recording Page → User selected share option` funnel:
@@ -35,6 +41,12 @@ Three separate inflection points in the new-user web `Recording Page → User se
 ### Plus: iOS deferred-deep-link condition bug (Sep 4, 2025)
 
 A separate bug in `AppDelegate+AppsFlyer.swift` (commit `15f7f203d`). The deferred deep-link handler has an inverted condition that suppresses the `Opened using deep link {type: "view", isDeferred: true}` event for most cold installs — and as a side effect, fails to route the user to the recording they were trying to view. Capture rate currently ~65/month vs an estimated 200–400 expected.
+
+**Supporting charts:**
+- [Share-loop conversion split by isDeferred (Nov 25 – today)](https://app.amplitude.com/analytics/zoog/chart/fxcpr11c/edit/aasxxnm3) — isDeferred=true cohort converts much worse and on smaller base than isDeferred=false
+- [Total Download clicks vs first-time deep-link opens (the ratio flip)](https://app.amplitude.com/analytics/zoog/chart/new/igaas1vt) — pre-Sep 2025: 1st-time opens > download clicks; post-Sep: the ratio flips
+- [Opened using deep link by `type` over time](https://app.amplitude.com/analytics/zoog/chart/new/hhf2jvne) — Jul 2025 view→recId rename (measurement artifact, distinct from this bug)
+- [isDeferred=true monthly uniques (Sep '25 onward)](https://app.amplitude.com/analytics/zoog/chart/new/4o8szj36) — ~65/month in Apr 2026; the floor the fix should lift
 
 ### Plus: cross-device identity gap (structural)
 
@@ -223,13 +235,40 @@ Five tracks. A is the urgent rollback. B is the iOS code fix. C–E are follow-o
 
 ## Cross-references
 
+### Companion plans + specs
 - ASO plan → [#18](https://github.com/ZoogHQ/.github/issues/18)
 - SEO plan → [#19](https://github.com/ZoogHQ/.github/issues/19)
 - Organic social plan → [#22](https://github.com/ZoogHQ/.github/issues/22)
 - Tier 1 creator-incentivization spec → `growth/specs/creator-incentivization-tier1.md`
-- ZoogIOS commit `b653dbf98` — Jul 6, 2025 — recId rename
-- ZoogIOS commit `15f7f203d` — Sep 4, 2025 — iOS deferred-deep-link handler (with bug)
-- ZoogIOS commit `22276fe25` — Aug 25, 2025 — revert during Firebase DDL shutdown
-- ZoogFrontEnd commit `cf8c9c9` — Sep 4, 2025 — frontend AppsFlyer params added
-- ZoogFrontEnd commit `b6c3195` — Nov 6, 2025 — incentive sharing task (regression)
 - Children doc strategic narrative → `https://zooghq.github.io/DataRoom/Children/`
+
+### Implicated code commits
+- ZoogIOS `b653dbf98` — Jul 6, 2025 — recId rename (measurement artifact, distinct from the bug)
+- ZoogIOS `15f7f203d` — Sep 4, 2025 — iOS deferred-deep-link handler **(with the inverted-condition bug)**
+- ZoogIOS `22276fe25` — Aug 25, 2025 — revert during Firebase DDL shutdown
+- ZoogFrontEnd `cf8c9c9` — Sep 4, 2025 — frontend AppsFlyer params added
+- ZoogFrontEnd `b6c3195` — Nov 6, 2025 — **incentive sharing task (regression in Area 1)**
+- ZoogFrontEnd `2f660ac` — Nov 6, 2025 — incentive sharing task updated
+
+### Canonical Amplitude charts referenced in this plan
+
+**Area 1 — Web request-rate (Nov 2025 regression):**
+- [Web Reaction Rate — total](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/fkgvu72t)
+- [Web Likes rate](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/l1d33b8q)
+- [Web Requests rate](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/ljfebiws)
+- [Mobile Requests by persona (control)](https://app.amplitude.com/analytics/zoog/chart/zn63vkhp/edit/zpaa1k0a)
+
+**iOS deferred-deep-link bug evidence:**
+- [Share-loop conversion split by isDeferred](https://app.amplitude.com/analytics/zoog/chart/fxcpr11c/edit/aasxxnm3)
+- [Download clicks vs first-time deep-link opens (ratio flip)](https://app.amplitude.com/analytics/zoog/chart/new/igaas1vt)
+- [Opened using deep link by type over time (Jul rename)](https://app.amplitude.com/analytics/zoog/chart/new/hhf2jvne)
+- [isDeferred=true monthly uniques](https://app.amplitude.com/analytics/zoog/chart/new/4o8szj36)
+
+**Volume baselines (loop input + funnel steps):**
+- [Recording Page (mobile-web, new) — monthly](https://app.amplitude.com/analytics/zoog/chart/new/phetw7a3)
+- [User clicks download Zoog — monthly](https://app.amplitude.com/analytics/zoog/chart/new/6ataybd7)
+- [Opened using deep link (view+recId, new users) — monthly](https://app.amplitude.com/analytics/zoog/chart/new/p78j1w9d)
+- [Click Start Recording (new users) — monthly](https://app.amplitude.com/analytics/zoog/chart/new/kcywt6aq)
+- [User selected share option — monthly active sharers](https://app.amplitude.com/analytics/zoog/chart/new/5fw26l7d)
+
+> **Note on chart URLs:** several of the volume-baseline links above are `chart/new/<editId>` URLs from ad-hoc queries. They persist in Amplitude but are not discoverable to other team members until you "Save As" them into the proper project (suggested: a `Share Loop` dashboard alongside the existing `Growth Loops` dashboard at [227vmg5l](https://app.amplitude.com/analytics/zoog/dashboard/227vmg5l)).
