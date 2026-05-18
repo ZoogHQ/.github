@@ -62,28 +62,32 @@ Four saved funnels measure share-loop health, each filtered to Amplitude's "New 
 
 The "did the recipient actually engage with what was sent" rate.
 
-- **12-month aggregate: 11.5%** of new users firing Opened using deep link go on to Watch Recording View (same-day, 1-day conversion window)
+- **Latest completed month: 89.1%** of new users firing Opened using deep link go on to Watch Recording View (same-day, 1-day conversion window)
+- **Trend:** healthy and stable through Q4 2025, declining from December, **trending back up since April 2026**
+- The post-event flow is healthy — when a new user reaches the in-app deep-link step, the experience routes them to the recording reliably
 - Chart: [Open From Deep Link [New User] > View](https://app.amplitude.com/analytics/zoog/chart/gx6j5gy7?linkingDashboardId=227vmg5l&sharingId=meht_Lbc)
 
 ### Open From Deep Link [New User] → React
 
 The "did the recipient react (like / laugh / wow / hug) to what they watched" rate. This is one of the two engagement signals that captures the Nov 2025 incentive-modal damage.
 
-- **12-month aggregate: 0.92%** of new deep-link users go on to fire User reacted to video. Note: this is a 3-step funnel (Deep link → Watch → React), so the low rate reflects compounding stepwise loss.
+- **Latest completed month: 6.93%** of new deep-link users go on to fire User reacted to video (3-step funnel: Deep link → Watch → React)
 - Chart: [Open From Deep Link [New User] > React](https://app.amplitude.com/analytics/zoog/chart/m3zdpxlx?sharingId=lGqMd4--)
 
 ### Open From Deep Link [New User] → Request Content
 
 The "did the recipient ask for another Zoog" rate — leading indicator of healthy loop engagement. The Nov 2025 regression hits hardest here.
 
-- **12-month aggregate: 0.17%** end-to-end (Deep link → Watch → Request)
+- **Latest completed month: ~18%** (3-step funnel: Deep link → Watch → Request)
+- **Trend:** trending up — partial recovery signal worth tracking
 - Chart: [Open From Deep Link [New User] > Request Content](https://app.amplitude.com/analytics/zoog/chart/rt4w937f?sharingId=unWLNeJT)
 
-### Open From Deep Link [New User] → Share
+### Open From Deep Link [New User] → Share ⭐ **PRIMARY METRIC**
 
-The "did the recipient become a re-sharer themselves" rate — the loop's regenerative output.
+The "did the recipient become a re-sharer themselves" rate — the loop's regenerative output. **This is the metric this plan exists to fix.**
 
-- **12-month aggregate: 4.49%** of new deep-link openers go on to User selected share option
+- **Latest completed month: 36.3%** of new deep-link openers go on to User selected share option
+- **Trend: declining** — this is the metric that quantifies the loop's regenerative health and where the Nov 2025 + Dec 2025 + Feb 2026 inflections compound
 - Split by `isDeferred` shows: cold-install (isDeferred=true) cohort converts much worse (5–28%) than warm-on-first-session (25–41%) — both decline through the year
 - Charts:
   - [Open From Deep Link [New User] > Share](https://app.amplitude.com/analytics/zoog/chart/fxcpr11c)
@@ -97,11 +101,14 @@ The "did the recipient become a re-sharer themselves" rate — the loop's regene
 
 | Metric | Today (Apr/May 2026) | 90-day target |
 |---|---:|---:|
+| ⭐ **Open From Deep Link [New User] → Share** (latest month) | **36.3% (declining)** | **stop the decline, return to growth, reach ≥45%** |
 | Web request rate (mobile-web) | 13.5% | **18–20%** (recover to pre-Nov baseline) |
 | Watch → Click Start Recording (new users via deep-link) | 31% | **45–50%** (recover to pre-Nov baseline) |
+| Open From Deep Link [New User] → View | 89.1% (recovering) | maintain ≥90% |
+| Open From Deep Link [New User] → React | 6.93% | recover toward pre-Nov baseline |
+| Open From Deep Link [New User] → Request Content | ~18% (trending up) | continue upward; ≥22% |
 | isDeferred=true monthly events (cold-install attribution) | ~65 | **200–400** (post iOS fix) |
 | New users firing Opened using deep link (view+recId, monthly) | ~200 | 400–600 (depends on share volume recovery + measurement) |
-| New web view → share rate (Aug 2025 baseline restoration) | (current low) | within 20% of Aug '25 baseline |
 | Click handlers with analytics coverage | 2 of 4 | 4 of 4 |
 | Cross-device merge rate (web visitor → iOS install) | unknown | measurable + tracked |
 
