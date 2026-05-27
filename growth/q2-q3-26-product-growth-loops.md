@@ -1,6 +1,6 @@
 # Q2–Q3 2026 Product Growth Loops Plan
 
-**Created:** May 18, 2026
+**Created:** May 18, 2026 · **Revised:** May 25, 2026 (App Store Connect cross-check; revised attribution)
 **Status:** Active
 **Owner:** Product + Engineering
 **Companion plans:**
@@ -12,9 +12,13 @@
 
 ## Context
 
-A diagnostic dive into the share-loop funnel (May 2025 – May 2026) surfaced two distinct collapses that are **product / engineering issues, not ASO issues**, and both are independently fixable.
+The install collapse from ~29K/mo (Sep 2024) to ~355/mo (May 2026) is the product of **three stacked breaks with different causes**. This doc tracks the product / engineering subset; the ASO plan tracks the listing subset.
 
-### Area 1 — Web request-rate collapse (Nov 2025)
+**Primary driver: Meta wind-down + pause (Nov 2025 – Jan 2026).** App Store Connect App Referrer downloads collapsed from 9,479 (Oct '25) → 3,072 (Nov) → 2,145 (Dec) → 73 (Jan '26) — a 99% collapse. App Referrer is almost entirely Meta-driven traffic (taps from Instagram/Facebook in-app contexts). This is paid-media-driven and out of scope for this plan. It is, however, the dominant cause of the share-loop INPUT collapse: fewer paid installs → fewer creators in the system → fewer shares produced each month → fewer share-loop installs downstream. The share loop didn't fundamentally break; its input volume collapsed.
+
+**Secondary driver: Share-loop conversion-rate degradation.** The share-loop funnel has degraded modestly through 2025 even on a per-cohort basis. The PRIMARY METRIC — Open From Deep Link [New User] → Share — sits at 36.3% and is trending down. This IS a product / engineering issue and is what this plan exists to fix. Two specific, independently fixable regressions contribute:
+
+### Area 1 — Web request-rate degradation (Nov 2025)
 
 On Nov 6, 2025 (ZoogFrontEnd commit `b6c3195` "incentive sharing task"), the web Recording Page request flow was rebuilt to insert an "incentive sharing" modal after the user selects a book to request. The modal occupies the screen, interrupts the natural engagement loop, and either suppresses the `User Requested Content` event from firing reliably or trains recipients to avoid the request action.
 
@@ -22,7 +26,9 @@ On Nov 6, 2025 (ZoogFrontEnd commit `b6c3195` "incentive sharing task"), the web
 - Web request rate (Click Play Recording → User Requested Content): **20.6% (Sep '25) → 13.5% (Apr '26)** — a 35% relative drop, stepwise from Nov 2025
 - Web like rate (Click Play Recording → User clicks the heart): essentially flat (5.2% → 4.0%) — confirms it's not a global reaction issue
 - Mobile request rate (Reactions View → User Requested Content): stable or improving across personas — confirms it's not content quality
-- Downstream effect: new-user Watch → Click Start Recording funnel fell **50% (May '25) → 31% (Mar '26)** — same timing, same shape
+- Click Download events Oct→Nov ratio (1,564 → 1,398, -11%) is slightly elevated vs the gentle baseline decline — consistent with the modal contributing a small additional drag
+
+**Scope correction (May 25):** Earlier framing put this Nov 6 regression as a primary driver of install collapse. Cross-check against App Store Connect Web Referrer downloads + Amplitude Click Download events shows the trajectory tracks Meta-driven creator-pool shrinkage much more closely than a single-commit cliff. The modal is still a real regression worth rolling back (highest-leverage product fix on the table; ~35% relative drop on a key funnel step), but its install-volume impact is meaningfully smaller than the Meta-driven input collapse.
 
 **Supporting charts:**
 - [Web Reaction Rate — total (Click Play → any reaction)](https://app.amplitude.com/analytics/zoog/chart/vjj0fmf/edit/fkgvu72t)
@@ -30,13 +36,13 @@ On Nov 6, 2025 (ZoogFrontEnd commit `b6c3195` "incentive sharing task"), the web
 - [Web Requests rate (Click Play → User Requested Content)](https://app.amplitude.com/analytics/zoog/chart/04nsaypt?sharingId=59DZWtQ4) — the 35% drop
 - [Mobile Requests by persona (Reactions View → User Requested Content)](https://app.amplitude.com/analytics/zoog/chart/zn63vkhp/edit/zpaa1k0a) — control: stable across personas, rules out content quality
 
-### Area 2 — New user web view → share collapse (Aug 25 / Dec 25 / Feb 26)
+### Area 2 — Share-loop CR per-cohort decline (across 2025)
 
-Three separate inflection points in the new-user web `Recording Page → User selected share option` funnel:
+Independent of input volume, the share-loop's per-cohort conversion has degraded. The PRIMARY METRIC (Open From Deep Link [New User] → Share, 36.3% trending down) is the cleanest signal. Specific inflection points on the new-user web `Recording Page → User selected share option` funnel:
 
-- **Aug 2025:** Firebase Dynamic Links shutdown (Aug 25, 2025). Frontend was mid-migration to AppsFlyer (deeplink.service.ts commits Aug 22 + Sep 4). iOS-side reverts on the same day. Web share-button URL generation may have shifted.
-- **Dec 2025:** Likely the cohort-lagged effect of the Nov 6 incentive modal compounding into share behavior. Also potentially the Dec 7 `reverted runmediflowv2` iOS commit.
-- **Feb 2026:** Cumulative — Meta pause completed + Nov 6 modal damage + degraded loop dynamics. Probably no single product change; the steady-state of a broken loop.
+- **Aug 2025:** Firebase Dynamic Links shutdown (Aug 25, 2025). Frontend was mid-migration to AppsFlyer (deeplink.service.ts commits Aug 22 + Sep 4). iOS-side reverts on the same day. Web share-button URL generation may have shifted. Investigation pending (workstream E).
+- **Dec 2025:** Possibly the cohort-lagged effect of the Nov 6 incentive modal compounding into share behavior. Also potentially the Dec 7 `reverted runmediflowv2` iOS commit. Investigation pending (workstream E).
+- **Feb 2026 onwards:** Steady state of the degraded loop.
 
 ### Plus: iOS deferred-deep-link condition bug (Sep 4, 2025)
 
@@ -51,6 +57,29 @@ A separate bug in `AppDelegate+AppsFlyer.swift` (commit `15f7f203d`). The deferr
 ### Plus: cross-device identity gap (structural)
 
 There's no web → iOS device_id handoff in the OneLink URL. Every web visitor and every post-install user lives under separate `amplitude_id` entries with no merge logic outside of post-install email-match sign-in. Cohort analysis across surfaces is materially distorted; the loop's true install contribution is not measurable without a fix.
+
+---
+
+## Install-channel attribution (App Store Connect cross-check)
+
+Cross-referencing App Store Connect's source-attributed downloads with Amplitude validates two things and recasts the diagnosis:
+
+**1. Web Referrer downloads ≈ Recording-Page "Click Download" funnel.** From Nov 2025 onward, App Store Connect Web Referrer Page Views and the Amplitude `User clicks download Zoog` event track each other within ~5%:
+
+| Month | Click DL (Amplitude) | Web Ref PV (ASC) | Web Ref DLs |
+|---|---:|---:|---:|
+| 2025-10 | 1,564 | 2,174 | 900 |
+| 2025-11 | 1,398 | 1,351 | 611 |
+| 2025-12 | 1,266 | 1,268 | 454 |
+| 2026-01 | 797 | 781 | 277 |
+| 2026-04 | 428 | 465 | 150 |
+| 2026-05 | 275 | 312 | 113 |
+
+This identity holds because iMessage taps (the dominant share channel) open in Safari → web viewer → "Get the App" → App Store via **Web Referrer**. So Web Referrer downloads in App Store Connect are effectively the share-loop install scorecard, independent of any Amplitude instrumentation. Pre-Nov 2025, Web Ref PV was 15–40% higher than Click DL — some other web source (landing page / blog / smart app banner) was contributing ~300–600 PV/mo and stopped in Nov; worth identifying separately.
+
+**2. App Referrer downloads ≈ Meta-driven installs.** Instagram / Facebook in-app browsers route their taps as App Referrer in App Store Connect. The Oct '25 → Jan '26 collapse (9,479 → 73) tracks Meta wind-down + pause precisely. App Referrer recovery is a paid-media decision and not gated by this plan.
+
+**Implication for measurement:** Going forward, **Web Referrer monthly downloads** are the cleanest install-side scorecard for share-loop health. We don't need to wait on Amplitude instrumentation fixes to track whether the loop is recovering.
 
 ---
 
@@ -101,16 +130,18 @@ The "did the recipient become a re-sharer themselves" rate — the loop's regene
 
 | Metric | Today (Apr/May 2026) | 90-day target |
 |---|---:|---:|
-| ⭐ **Open From Deep Link [New User] → Share** (latest month) | **36.3% (declining)** | **stop the decline, return to growth, reach ≥45%** |
+| ⭐ **Open From Deep Link [New User] → Share** (loop CR) | **36.3% (declining)** | **stop the decline, return to growth, reach ≥45%** |
+| 🎯 **Web Referrer monthly downloads** (loop channel scorecard) | **113 (May '26)** | **300–400** (recover toward Oct '25 baseline of ~900) |
 | Web request rate (mobile-web) | 13.5% | **18–20%** (recover to pre-Nov baseline) |
 | Watch → Click Start Recording (new users via deep-link) | 31% | **45–50%** (recover to pre-Nov baseline) |
 | Open From Deep Link [New User] → View | 89.1% (recovering) | maintain ≥90% |
 | Open From Deep Link [New User] → React | 6.93% | recover toward pre-Nov baseline |
 | Open From Deep Link [New User] → Request Content | ~18% (trending up) | continue upward; ≥22% |
 | isDeferred=true monthly events (cold-install attribution) | ~65 | **200–400** (post iOS fix) |
-| New users firing Opened using deep link (view+recId, monthly) | ~200 | 400–600 (depends on share volume recovery + measurement) |
 | Click handlers with analytics coverage | 2 of 4 | 4 of 4 |
 | Cross-device merge rate (web visitor → iOS install) | unknown | measurable + tracked |
+
+> **Note on Web Referrer downloads target.** Pre-collapse baseline was ~900/mo (Oct 2025) before share-loop CR degradation compounded with creator-pool shrinkage from Meta pause. The 300–400 target assumes the Nov 6 modal rollback + iOS DDL fix lift per-cohort CR, but does NOT assume Meta resumption (which would lift the input). Full recovery to ~900/mo requires both.
 
 ---
 
@@ -265,6 +296,8 @@ Five tracks. A is the urgent rollback. B is the iOS code fix. C–E are follow-o
 | 2026-05-18 | Fix iOS deferred-deep-link condition | Inverted condition in commit `15f7f203d` suppresses most cold-install events. Single-line fix. |
 | 2026-05-18 | Defer Web → iOS device_id handoff to Week 7+ | Important strategic improvement but not blocking. Higher-impact fixes ship first. |
 | 2026-05-18 | Defer App Clip and Tier 1 creator-incentivization decisions until Aug | Both depend on corrected loop math, which we won't have until the Week 1 fixes have run for ~30 days. |
+| 2026-05-25 | Re-attribute App Referrer collapse to Meta wind-down | App Store Connect cross-check showed App Referrer (Instagram/Facebook in-app context) tracked Meta spend precisely. Removes the framing of "the share loop broke as a channel." Share loop CR is degraded (real, fixable here); share loop INPUT collapsed (driven by paid wind-down, not gated by this plan). |
+| 2026-05-25 | Adopt Web Referrer monthly downloads as the install-side scorecard for share-loop health | Validated identity: ASC Web Referrer PV ≈ Amplitude Click Download events (~95% alignment Nov '25 onward), driven by iMessage→Safari→App Store path. Gives us a clean install measurement that doesn't depend on Amplitude instrumentation. |
 
 ---
 
@@ -276,6 +309,8 @@ Five tracks. A is the urgent rollback. B is the iOS code fix. C–E are follow-o
 - [ ] Cross-device cohort analysis (post-handoff fix) — what does the web visitor → installer → creator funnel actually look like end-to-end? Currently can't see it without merge.
 - [ ] iPad gap: auto-popup gates are `(iOS && mobile) || (Mac && tablet)`. Modern iPads identify variously. How big is the iPad cohort and are they falling through?
 - [ ] Whether to remove or rebuild the `parent_after_div` and `halloween_div` popups (currently dead code — desktop-gated with iOS-only buttons inside).
+- [ ] **Pre-Nov 2025 Web Referrer gap:** Web Ref PV was 15–40% higher than Click Download events through 2025; the gap closed in Nov '25. What was the additional ~300–600 PV/mo source (landing page, blog mentions, smart app banner)? Worth identifying — that's ~10 installs/mo to potentially recover.
+- [ ] **iPad-on-Messages share path:** does iMessage on iPad route to Safari (Web Referrer) the same way as iPhone? Affects attribution if iPad share-loop volume is non-trivial.
 
 ---
 
